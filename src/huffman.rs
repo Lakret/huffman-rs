@@ -1,33 +1,10 @@
 use bit_vec::BitVec;
-use rayon::prelude::*;
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap},
     hash::Hash,
 };
-
-pub fn learn_frequencies(lines: &Vec<String>) -> HashMap<char, i64> {
-    lines
-        .par_iter()
-        .fold(
-            || HashMap::new(),
-            |mut freqs: HashMap<_, _>, line: &String| {
-                for ch in line.chars() {
-                    *freqs.entry(ch).or_insert(0) += 1;
-                }
-                freqs
-            },
-        )
-        .reduce(
-            || HashMap::new(),
-            |mut freqs1, freqs2| {
-                freqs2
-                    .into_iter()
-                    .for_each(|(ch, n)| *freqs1.entry(ch).or_insert(0) += n);
-                freqs1
-            },
-        )
-}
+use Tree::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tree<T> {
@@ -41,8 +18,6 @@ pub enum Tree<T> {
         right: Box<Tree<T>>,
     },
 }
-
-use Tree::*;
 
 impl<T: Clone> Tree<T> {
     pub fn freq(&self) -> i64 {
@@ -148,11 +123,12 @@ pub fn build_huffman_tree<T: Eq + Clone>(freqs: &HashMap<T, i64>) -> Tree<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::freqs::*;
 
     #[test]
     fn learn_frequencies_test() {
         let input = vec!["this is an epic sentence".to_string(), "xyz ".to_string()];
-        let freqs = learn_frequencies(&input);
+        let freqs = learn_char_frequencies(&input);
         assert_eq!(freqs[&' '], 5);
         assert_eq!(freqs[&'t'], 2);
         assert_eq!(freqs[&'i'], 3);

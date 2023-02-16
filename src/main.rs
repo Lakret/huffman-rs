@@ -4,6 +4,7 @@ use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 
+mod freqs;
 mod huffman;
 
 fn main() -> Result<(), Error> {
@@ -14,9 +15,13 @@ fn main() -> Result<(), Error> {
     dbg!(&lines[..5]);
     dbg!(&lines[(lines.len() - 5)..]);
 
-    let freqs = huffman::learn_frequencies(&lines);
-    dbg!(&freqs);
-    dbg!(freqs.len());
+    let char_freqs = freqs::learn_char_frequencies(&lines);
+    dbg!(&char_freqs);
+    dbg!(char_freqs.len());
+
+    let word_freqs = freqs::learn_word_frequencies(&lines);
+    dbg!(word_freqs.get("the"));
+    dbg!(word_freqs.len());
     Ok(())
 }
 
