@@ -28,21 +28,21 @@ pub fn learn_frequencies(lines: &Vec<String>) -> HashMap<char, i64> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Tree {
+pub enum Tree<T> {
     Leaf {
         freq: i64,
-        ch: char,
+        token: T,
     },
     Node {
         freq: i64,
-        left: Box<Tree>,
-        right: Box<Tree>,
+        left: Box<Tree<T>>,
+        right: Box<Tree<T>>,
     },
 }
 
 use Tree::*;
 
-impl Tree {
+impl<T: Clone> Tree<T> {
     pub fn freq(&self) -> i64 {
         match self {
             Leaf { freq, .. } => *freq,
@@ -50,21 +50,21 @@ impl Tree {
         }
     }
 
-    pub fn ch(&self) -> Option<char> {
+    pub fn token(&self) -> Option<T> {
         match self {
-            Leaf { ch, .. } => Some(*ch),
+            Leaf { token, .. } => Some(token.clone()),
             Node { .. } => None,
         }
     }
 
-    pub fn left(&self) -> Option<&Tree> {
+    pub fn left(&self) -> Option<&Tree<T>> {
         match self {
             Node { left, .. } => Some(left),
             Leaf { .. } => None,
         }
     }
 
-    pub fn right(&self) -> Option<&Tree> {
+    pub fn right(&self) -> Option<&Tree<T>> {
         match self {
             Node { right, .. } => Some(right),
             Leaf { .. } => None,
@@ -72,23 +72,23 @@ impl Tree {
     }
 }
 
-impl Ord for Tree {
+impl<T: Clone + Eq> Ord for Tree<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.freq().cmp(&other.freq())
     }
 }
 
-impl PartialOrd for Tree {
+impl<T: Clone + Eq> PartialOrd for Tree<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-pub fn build_huffman_tree(freqs: &HashMap<char, i64>) -> Tree {
+pub fn build_huffman_tree<T: Eq + Clone>(freqs: &HashMap<T, i64>) -> Tree<T> {
     let mut heap = BinaryHeap::new();
-    for (ch, freq) in freqs {
-        let (freq, ch) = (*freq, *ch);
-        heap.push(Reverse(Leaf { freq, ch }))
+    for (token, freq) in freqs {
+        let (freq, token) = (*freq, token.clone());
+        heap.push(Reverse(Leaf { freq, token }))
     }
 
     while heap.len() > 1 {
@@ -134,12 +134,12 @@ mod tests {
         assert_eq!(tree.freq(), 100);
 
         // the most frequent character only requires 1 bit
-        assert_eq!(tree.left().and_then(|n| n.ch()), Some('a'));
+        assert_eq!(tree.left().and_then(|n| n.token()), Some('a'));
         assert_eq!(tree.left().map(|n| n.freq()), Some(40));
 
         // the second most frequent character requires 2 bits
         assert_eq!(
-            tree.right().and_then(|t| t.right()).and_then(|n| n.ch()),
+            tree.right().and_then(|t| t.right()).and_then(|n| n.token()),
             Some('b')
         );
         assert_eq!(
@@ -152,7 +152,7 @@ mod tests {
             tree.right()
                 .and_then(|t| t.left())
                 .and_then(|t| t.left())
-                .and_then(|n| n.ch()),
+                .and_then(|n| n.token()),
             Some('d')
         );
         assert_eq!(
@@ -167,7 +167,7 @@ mod tests {
             tree.right()
                 .and_then(|t| t.left())
                 .and_then(|t| t.right())
-                .and_then(|n| n.ch()),
+                .and_then(|n| n.token()),
             Some('c')
         );
         assert_eq!(
