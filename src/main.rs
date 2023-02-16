@@ -4,6 +4,7 @@ use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
 
+mod compression;
 mod freqs;
 mod huffman;
 
