@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn build_huffman_tree_test() {
+    fn huffman_tree_test() {
         let mut freqs = HashMap::new();
         freqs.insert('a', 40);
         freqs.insert('b', 35);
@@ -216,5 +216,20 @@ mod tests {
                 .map(|n| n.freq()),
             Some(20)
         );
+
+        let encoder = tree.to_encoder();
+        assert!(encoder.get(&'a').unwrap().eq_vec(&[false]));
+        assert!(encoder.get(&'b').unwrap().eq_vec(&[true, true]));
+        assert!(encoder.get(&'c').unwrap().eq_vec(&[true, false, true]));
+        assert!(encoder.get(&'d').unwrap().eq_vec(&[true, false, false]));
+
+        let decoder = tree.to_decoder(Some(encoder.clone()));
+        assert_eq!(decoder.len(), 4);
+
+        let mut c_path = BitVec::new();
+        c_path.push(true);
+        c_path.push(false);
+        c_path.push(true);
+        assert_eq!(decoder.get(&c_path), Some(&'c'));
     }
 }
