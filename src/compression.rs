@@ -1,10 +1,34 @@
 use bit_vec::BitVec;
-use std::{collections::HashMap, hash::Hash};
+use serde::{Deserialize, Serialize};
+use std::{borrow::Cow, collections::HashMap, hash::Hash};
 
 use crate::huffman::Tree;
 use Tree::*;
 
 impl<T: Eq + Clone + Hash> Tree<T> {
+    // TODO: pass pre-computed encoder if possible
+    pub fn encode(&self, data: &[T]) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+        let encoder = self.to_encoder();
+
+        let mut encoded = vec![];
+        for item in data {
+            encoded.push(encoder.get(item).unwrap().clone());
+        }
+        rmp_serde::to_vec(&encoded)
+    }
+
+    // TODO: pass pre-computed decoder if possible
+    pub fn decode(&self, data: &[u8]) -> Result<Vec<T>, rmp_serde::decode::Error> {
+        let codes: Vec<BitVec> = rmp_serde::from_slice(data)?;
+        let decoder = self.to_decoder(None);
+
+        let mut res = vec![];
+        for code in codes {
+            res.push(decoder.get(&code).unwrap().clone());
+        }
+        Ok(res)
+    }
+
     pub fn to_encoder(&self) -> HashMap<T, BitVec> {
         let mut encoder = HashMap::new();
 
@@ -30,11 +54,13 @@ impl<T: Eq + Clone + Hash> Tree<T> {
         encoder
     }
 
-    pub fn to_decoder(&self, encoder: Option<HashMap<T, BitVec>>) -> HashMap<BitVec, T> {
-        let encoder = encoder.unwrap_or(self.to_encoder());
+    pub fn to_decoder(&self, encoder: Option<&HashMap<T, BitVec>>) -> HashMap<BitVec, T> {
+        let encoder = encoder
+            .map(|m| m.clone())
+            .unwrap_or_else(|| self.to_encoder());
 
         let mut decoder = HashMap::new();
-        for (token, prefix) in encoder {
+        for (token, prefix) in encoder.clone() {
             decoder.insert(prefix, token);
         }
         decoder
@@ -62,7 +88,7 @@ mod tests {
         assert!(encoder.get(&'c').unwrap().eq_vec(&[true, false, true]));
         assert!(encoder.get(&'d').unwrap().eq_vec(&[true, false, false]));
 
-        let decoder = tree.to_decoder(Some(encoder.clone()));
+        let decoder = tree.to_decoder(Some(&encoder));
         assert_eq!(decoder.len(), 4);
 
         let mut c_path = BitVec::new();
@@ -70,5 +96,13 @@ mod tests {
         c_path.push(false);
         c_path.push(true);
         assert_eq!(decoder.get(&c_path), Some(&'c'));
+
+        let test_arr = &['a', 'a', 'a', 'b', 'a', 'd', 'c'];
+        let encoded = tree.encode(test_arr);
+        assert!(encoded.is_ok());
+
+        let decoded = tree.decode(&encoded.unwrap());
+        assert!(decoded.is_ok());
+        assert_eq!(decoded.unwrap(), test_arr);
     }
 }
