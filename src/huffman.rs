@@ -17,6 +17,7 @@ pub enum Tree<T> {
     },
 }
 
+#[allow(dead_code)]
 impl<T: Clone> Tree<T> {
     pub fn freq(&self) -> i64 {
         match self {
