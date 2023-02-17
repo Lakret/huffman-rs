@@ -20,9 +20,15 @@ fn main() -> Result<(), Error> {
     dbg!(&char_freqs);
     dbg!(char_freqs.len());
 
-    let word_freqs = freqs::learn_word_frequencies(&lines);
-    dbg!(word_freqs.get("the"));
-    dbg!(word_freqs.len());
+    // let word_freqs = freqs::learn_word_frequencies(&lines);
+    // dbg!(word_freqs.get("the"));
+    // dbg!(word_freqs.len());
+
+    let tree = huffman::build_huffman_tree(&char_freqs);
+
+    let compressed = compression::compress_file(tree.to_encoder(), "data/wikisent2.txt");
+    dbg!(compressed.unwrap().len());
+
     Ok(())
 }
 

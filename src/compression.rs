@@ -1,32 +1,66 @@
 use bit_vec::BitVec;
-use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap, hash::Hash};
+use rayon::prelude::*;
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    hash::Hash,
+    io::{BufRead, BufReader},
+    path::Path,
+};
 
 use crate::huffman::Tree;
 use Tree::*;
 
+// TODO: use preprocess
+pub fn compress_file<P: AsRef<Path>>(
+    encoder: HashMap<char, BitVec>,
+    path: P,
+) -> Result<BitVec, Box<dyn std::error::Error>> {
+    let text = fs::read_to_string(path)?;
+    let lines: Vec<_> = text.split_inclusive('\n').collect();
+    let compressed = lines
+        .par_iter()
+        .flat_map(|line| {
+            let chs: Vec<_> = line.chars().collect();
+            chs.into_par_iter()
+                .map(|ch| encoder.get(&ch).unwrap().clone())
+        })
+        .reduce(
+            || BitVec::new(),
+            |mut v1: BitVec, v2: BitVec| {
+                v1.extend(v2);
+                v1
+            },
+        );
+    Ok(compressed)
+}
+
+pub fn decompress_file() {
+    // TODO:
+    // et codes: Vec<BitVec> = rmp_serde::from_slice(data)?;
+}
+
 impl<T: Eq + Clone + Hash> Tree<T> {
     // TODO: pass pre-computed encoder if possible
-    pub fn encode(&self, data: &[T]) -> Result<Vec<u8>, rmp_serde::encode::Error> {
+    pub fn encode(&self, data: &[T]) -> Vec<BitVec> {
         let encoder = self.to_encoder();
 
         let mut encoded = vec![];
         for item in data {
             encoded.push(encoder.get(item).unwrap().clone());
         }
-        rmp_serde::to_vec(&encoded)
+        encoded
     }
 
     // TODO: pass pre-computed decoder if possible
-    pub fn decode(&self, data: &[u8]) -> Result<Vec<T>, rmp_serde::decode::Error> {
-        let codes: Vec<BitVec> = rmp_serde::from_slice(data)?;
+    pub fn decode(&self, data: &Vec<BitVec>) -> Vec<T> {
         let decoder = self.to_decoder(None);
 
         let mut res = vec![];
-        for code in codes {
+        for code in data {
             res.push(decoder.get(&code).unwrap().clone());
         }
-        Ok(res)
+        res
     }
 
     pub fn to_encoder(&self) -> HashMap<T, BitVec> {
@@ -99,10 +133,7 @@ mod tests {
 
         let test_arr = &['a', 'a', 'a', 'b', 'a', 'd', 'c'];
         let encoded = tree.encode(test_arr);
-        assert!(encoded.is_ok());
-
-        let decoded = tree.decode(&encoded.unwrap());
-        assert!(decoded.is_ok());
-        assert_eq!(decoded.unwrap(), test_arr);
+        let decoded = tree.decode(&encoded);
+        assert_eq!(decoded, test_arr);
     }
 }
