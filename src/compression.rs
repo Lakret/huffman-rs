@@ -16,15 +16,15 @@ struct CompressedData<T: Eq + Hash> {
     data: Vec<BitVec>,
 }
 
-pub fn compress<'a, T, FreqsF, TokensF, TokensIter>(
+pub fn compress<'a, T, FreqsF, TokenExtractor, TokensIter>(
     lines: &'a Vec<String>,
     get_freqs: FreqsF,
-    line_to_tokens: TokensF,
+    line_to_tokens: TokenExtractor,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>>
 where
     T: Clone + Eq + Hash + Send + Sync + Serialize,
     FreqsF: Fn(&'a Vec<String>) -> HashMap<T, i64>,
-    TokensF: Fn(&'a str) -> TokensIter + Send + Sync,
+    TokenExtractor: Fn(&'a str) -> TokensIter + Send + Sync,
     TokensIter: Iterator<Item = T>,
 {
     let freqs = get_freqs(lines);
@@ -36,48 +36,6 @@ where
         .map(|line| {
             line_to_tokens(line)
                 .map(|token| encoder.get(&token).unwrap().clone())
-                .fold(BitVec::new(), |mut vec1, vec2| {
-                    vec1.extend(vec2);
-                    vec1
-                })
-        })
-        .collect();
-
-    let compressed_data = CompressedData { encoder, data };
-    rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
-}
-
-pub fn compress_as_chars(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let freqs = freqs::learn_char_frequencies(lines);
-    let tree = huffman::build_huffman_tree(&freqs);
-    let encoder = tree.to_encoder();
-
-    let data: Vec<_> = lines
-        .par_iter()
-        .map(|line| {
-            line.chars()
-                .map(|ch| encoder.get(&ch).unwrap().clone())
-                .fold(BitVec::new(), |mut vec1, vec2| {
-                    vec1.extend(vec2);
-                    vec1
-                })
-        })
-        .collect();
-
-    let compressed_data = CompressedData { encoder, data };
-    rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
-}
-
-pub fn compress_as_words(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let freqs = freqs::learn_word_frequencies(lines);
-    let tree = huffman::build_huffman_tree(&freqs);
-    let encoder = tree.to_encoder();
-
-    let data: Vec<_> = lines
-        .par_iter()
-        .map(|line| {
-            line.split_ascii_whitespace()
-                .map(|s| encoder.get(s).unwrap().clone())
                 .fold(BitVec::new(), |mut vec1, vec2| {
                     vec1.extend(vec2);
                     vec1
@@ -238,12 +196,8 @@ mod tests {
                 .to_string(),
         ];
 
-        let data = compress_as_chars(&lines).unwrap();
+        let data = compress(&lines, freqs::learn_char_frequencies, |line| line.chars()).unwrap();
         let res_lines = decompress(data, |x: Vec<char>| x.into_iter().collect()).unwrap();
-        assert_eq!(&lines, &res_lines);
-
-        let data = compress_as_words(&lines).unwrap();
-        let res_lines = decompress(data, |x: Vec<String>| x.join(" ")).unwrap();
         assert_eq!(&lines, &res_lines);
 
         let data = compress(&lines, freqs::learn_word_frequencies, |line| {
