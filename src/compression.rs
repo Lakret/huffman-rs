@@ -1,14 +1,8 @@
 use bit_vec::BitVec;
 use rayon::prelude::*;
-use rmp_serde::{self, encode};
+use rmp_serde;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    hash::Hash,
-    io::Write,
-    path::Path,
-};
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     freqs,
@@ -20,6 +14,37 @@ use Tree::*;
 struct CompressedData<T: Eq + Hash> {
     encoder: HashMap<T, BitVec>,
     data: Vec<BitVec>,
+}
+
+pub fn compress<'a, T, FreqsF, TokensF, TokensIter>(
+    lines: &'a Vec<String>,
+    get_freqs: FreqsF,
+    line_to_tokens: TokensF,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>>
+where
+    T: Clone + Eq + Hash + Send + Sync + Serialize,
+    FreqsF: Fn(&'a Vec<String>) -> HashMap<T, i64>,
+    TokensF: Fn(&'a str) -> TokensIter + Send + Sync,
+    TokensIter: Iterator<Item = T>,
+{
+    let freqs = get_freqs(lines);
+    let tree = huffman::build_huffman_tree(&freqs);
+    let encoder = tree.to_encoder();
+
+    let data: Vec<_> = lines
+        .par_iter()
+        .map(|line| {
+            line_to_tokens(line)
+                .map(|token| encoder.get(&token).unwrap().clone())
+                .fold(BitVec::new(), |mut vec1, vec2| {
+                    vec1.extend(vec2);
+                    vec1
+                })
+        })
+        .collect();
+
+    let compressed_data = CompressedData { encoder, data };
+    rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
 }
 
 pub fn compress_as_chars(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -75,12 +100,7 @@ where
     let CompressedData { encoder, data }: CompressedData<T> =
         rmp_serde::decode::from_slice(&data[..])?;
 
-    // TODO: extract into separate fun
-    let mut decoder = HashMap::new();
-    for (token, prefix) in encoder.clone() {
-        decoder.insert(prefix, token);
-    }
-
+    let decoder = encoder_to_decoder(&encoder);
     let lines: Vec<_> = data
         .par_iter()
         .map(|line| {
@@ -107,6 +127,14 @@ where
         .collect();
 
     Ok(lines)
+}
+
+fn encoder_to_decoder<T: Clone>(encoder: &HashMap<T, BitVec>) -> HashMap<BitVec, T> {
+    let mut decoder = HashMap::new();
+    for (token, prefix) in encoder.clone() {
+        decoder.insert(prefix, token);
+    }
+    decoder
 }
 
 impl<T: Eq + Clone + Hash> Tree<T> {
@@ -162,11 +190,7 @@ impl<T: Eq + Clone + Hash> Tree<T> {
             .map(|m| m.clone())
             .unwrap_or_else(|| self.to_encoder());
 
-        let mut decoder = HashMap::new();
-        for (token, prefix) in encoder.clone() {
-            decoder.insert(prefix, token);
-        }
-        decoder
+        encoder_to_decoder(&encoder)
     }
 }
 
@@ -219,6 +243,13 @@ mod tests {
         assert_eq!(&lines, &res_lines);
 
         let data = compress_as_words(&lines).unwrap();
+        let res_lines = decompress(data, |x: Vec<String>| x.join(" ")).unwrap();
+        assert_eq!(&lines, &res_lines);
+
+        let data = compress(&lines, freqs::learn_word_frequencies, |line| {
+            line.split_ascii_whitespace().map(|token| token.to_string())
+        })
+        .unwrap();
         let res_lines = decompress(data, |x: Vec<String>| x.join(" ")).unwrap();
         assert_eq!(&lines, &res_lines);
     }
