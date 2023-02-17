@@ -24,14 +24,8 @@ struct CompressedData<T: Eq + Hash> {
 
 // TODO: use preprocess
 // TODO: try bincode
-pub fn compress_file<P: AsRef<Path>>(
-    path: P,
-    output_path: P,
-) -> Result<usize, Box<dyn std::error::Error>> {
-    let text = fs::read_to_string(path)?;
-    let lines: Vec<_> = text.split_inclusive('\n').map(|x| x.to_string()).collect();
-
-    let freqs = freqs::learn_word_frequencies(&lines);
+pub fn compress(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let freqs = freqs::learn_char_frequencies(lines);
     let tree = huffman::build_huffman_tree(&freqs);
     let encoder = tree.to_encoder();
 
@@ -42,8 +36,11 @@ pub fn compress_file<P: AsRef<Path>>(
             // it seems that words compression yields 1847299618 / 8 / 1024 / 1024 ~= 220MB (w/o header)
             // and chars compression yields 4385985563 / 8 / 1024 / 1024 ~= 523MB (w/o header)
             // let chs: Vec<_> = line.chars().collect();
-            line.split_ascii_whitespace()
-                .map(|s| encoder.get(s).unwrap().clone())
+            //
+            // .split_ascii_whitespace()
+            // .map(|s| encoder.get(s).unwrap().clone())
+            line.chars()
+                .map(|ch| encoder.get(&ch).unwrap().clone())
                 .fold(BitVec::new(), |mut vec1, vec2| {
                     vec1.extend(vec2);
                     vec1
@@ -52,19 +49,12 @@ pub fn compress_file<P: AsRef<Path>>(
         .collect();
 
     let compressed_data = CompressedData { encoder, data };
-    let bytes = rmp_serde::encode::to_vec(&compressed_data)?;
-
-    let mut out_f = File::create(output_path)?;
-    out_f.write(&bytes).map_err(|err| err.into())
+    rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
 }
 
-pub fn decompress_file<T, P>(path: P) -> Result<Vec<Vec<T>>, Box<dyn std::error::Error>>
-where
-    T: Eq + Hash + Clone + for<'a> Deserialize<'a> + Send + Sync,
-    P: AsRef<Path>,
-{
-    let file = File::open(path)?;
-    let CompressedData { encoder, data }: CompressedData<T> = rmp_serde::decode::from_read(file)?;
+pub fn decompress(data: Vec<u8>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let CompressedData { encoder, data }: CompressedData<char> =
+        rmp_serde::decode::from_slice(&data[..])?;
 
     // TODO: extract into separate fun
     let mut decoder = HashMap::new();
@@ -79,26 +69,23 @@ where
             let mut candidate = BitVec::new();
             let mut tokens = vec![];
 
-            loop {
-                if let Some(bit) = line.get(pos) {
-                    candidate.push(bit);
-                    pos += 1;
+            while pos < line.len() {
+                let bit = line.get(pos).unwrap();
+                candidate.push(bit);
+                pos += 1;
 
-                    match decoder.get(&candidate) {
-                        Some(token) => {
-                            tokens.push(token.clone());
+                match decoder.get(&candidate) {
+                    Some(token) => {
+                        tokens.push(token.clone());
 
-                            candidate.clear();
-                        }
-                        None => (),
+                        candidate = BitVec::new();
                     }
-                } else {
-                    break;
-                };
+                    None => (),
+                }
             }
 
             // TODO: word vs char
-            tokens
+            tokens.into_iter().collect()
         })
         .collect();
 
@@ -200,5 +187,18 @@ mod tests {
         let encoded = tree.encode(test_arr);
         let decoded = tree.decode(&encoded);
         assert_eq!(decoded, test_arr);
+    }
+
+    #[test]
+    fn compress_decompress_test() {
+        let lines = vec![
+            "hey there! nice to meet you.".to_string(),
+            "Serde is a framework for serializing and deserializing Rust data structures"
+                .to_string(),
+        ];
+
+        let data = compress(&lines).unwrap();
+        let res_lines = decompress(data).unwrap();
+        assert_eq!(&lines, &res_lines);
     }
 }
