@@ -1,27 +1,33 @@
 use bit_vec::BitVec;
 use rayon::prelude::*;
-use std::{
-    collections::HashMap,
-    fs::{self, File},
-    hash::Hash,
-    io::{BufRead, BufReader},
-    path::Path,
-};
+use std::{collections::HashMap, fs, hash::Hash, path::Path};
 
-use crate::huffman::Tree;
+use crate::{
+    freqs,
+    huffman::{self, Tree},
+};
 use Tree::*;
 
 // TODO: use preprocess
-pub fn compress_file<P: AsRef<Path>>(
-    encoder: HashMap<char, BitVec>,
-    path: P,
-) -> Result<BitVec, Box<dyn std::error::Error>> {
+pub fn compress_file<P: AsRef<Path>>(path: P) -> Result<BitVec, Box<dyn std::error::Error>> {
     let text = fs::read_to_string(path)?;
-    let lines: Vec<_> = text.split_inclusive('\n').collect();
+    let lines: Vec<_> = text.split_inclusive('\n').map(|x| x.to_string()).collect();
+
+    let freqs = freqs::learn_word_frequencies(&lines);
+    let tree = huffman::build_huffman_tree(&freqs);
+    let encoder = tree.to_encoder();
+
     let compressed = lines
         .par_iter()
         .flat_map(|line| {
-            let chs: Vec<_> = line.chars().collect();
+            // TODO: comparison between words & chars compression performance
+            // it seems that words compression yields 1847299618 / 8 / 1024 / 1024 ~= 220MB (w/o header)
+            // and chars compression yields 4385985563 / 8 / 1024 / 1024 ~= 523MB (w/o header)
+            // let chs: Vec<_> = line.chars().collect();
+            let chs: Vec<_> = line
+                .split_ascii_whitespace()
+                .map(|s| s.to_string())
+                .collect();
             chs.into_par_iter()
                 .map(|ch| encoder.get(&ch).unwrap().clone())
         })
