@@ -8,9 +8,9 @@ mod freqs;
 mod huffman;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let compressed_len =
-        compression::compress_file("data/wikisent2.txt", "data/compressed.huffman");
-    dbg!(compressed_len.unwrap());
+    // let compressed_len =
+    //     compression::compress_file("data/wikisent2.txt", "data/compressed.huffman");
+    // dbg!(compressed_len.unwrap());
 
     let decompressed: Vec<Vec<String>> = compression::decompress_file("data/compressed.huffman")?;
     dbg!(&decompressed[..2]);

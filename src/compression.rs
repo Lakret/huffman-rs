@@ -75,33 +75,26 @@ where
     let lines: Vec<_> = data
         .par_iter()
         .map(|line| {
-            let mut read_bits = 0;
             let mut pos = 0;
             let mut candidate = BitVec::new();
             let mut tokens = vec![];
 
-            while read_bits < line.len() {
-                loop {
-                    if let Some(bit) = line.get(pos) {
-                        candidate.push(bit);
-                        pos += 1;
+            loop {
+                if let Some(bit) = line.get(pos) {
+                    candidate.push(bit);
+                    pos += 1;
 
-                        match decoder.get(&candidate) {
-                            Some(token) => {
-                                tokens.push(token.clone());
-                                read_bits += candidate.len();
-                                pos = 0;
-                                candidate.clear();
-                                break;
-                            }
-                            None => (),
+                    match decoder.get(&candidate) {
+                        Some(token) => {
+                            tokens.push(token.clone());
+
+                            candidate.clear();
                         }
-                    } else {
-                        pos = 0;
-                        candidate.clear();
-                        break;
-                    };
-                }
+                        None => (),
+                    }
+                } else {
+                    break;
+                };
             }
 
             // TODO: word vs char
