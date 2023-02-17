@@ -1,5 +1,4 @@
 use lazy_static::lazy_static;
-use rayon::prelude::*;
 use regex::Regex;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
@@ -8,10 +7,14 @@ mod compression;
 mod freqs;
 mod huffman;
 
-fn main() -> Result<(), Error> {
-    let compressed =
-        compression::compress_file("data/wikisent2.txt", Some("data/compressed.huffman"));
-    dbg!(compressed.unwrap().len());
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let compressed_len =
+        compression::compress_file("data/wikisent2.txt", "data/compressed.huffman");
+    dbg!(compressed_len.unwrap());
+
+    let decompressed: Vec<Vec<String>> = compression::decompress_file("data/compressed.huffman")?;
+    dbg!(&decompressed[..2]);
+    dbg!(&decompressed[(decompressed.len() - 2)..]);
 
     Ok(())
 }

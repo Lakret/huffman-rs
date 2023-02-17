@@ -1,6 +1,7 @@
 use bit_vec::BitVec;
 use rayon::prelude::*;
 use rmp_serde;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -15,11 +16,18 @@ use crate::{
 };
 use Tree::*;
 
+#[derive(Serialize, Deserialize)]
+struct CompressedData<T: Eq + Hash> {
+    encoder: HashMap<T, BitVec>,
+    data: Vec<BitVec>,
+}
+
 // TODO: use preprocess
+// TODO: try bincode
 pub fn compress_file<P: AsRef<Path>>(
     path: P,
-    output: Option<P>,
-) -> Result<BitVec, Box<dyn std::error::Error>> {
+    output_path: P,
+) -> Result<usize, Box<dyn std::error::Error>> {
     let text = fs::read_to_string(path)?;
     let lines: Vec<_> = text.split_inclusive('\n').map(|x| x.to_string()).collect();
 
@@ -27,45 +35,81 @@ pub fn compress_file<P: AsRef<Path>>(
     let tree = huffman::build_huffman_tree(&freqs);
     let encoder = tree.to_encoder();
 
-    let compressed = lines
+    let data: Vec<_> = lines
         .par_iter()
-        .flat_map(|line| {
+        .map(|line| {
             // TODO: comparison between words & chars compression performance
             // it seems that words compression yields 1847299618 / 8 / 1024 / 1024 ~= 220MB (w/o header)
             // and chars compression yields 4385985563 / 8 / 1024 / 1024 ~= 523MB (w/o header)
             // let chs: Vec<_> = line.chars().collect();
-            let chs: Vec<_> = line
-                .split_ascii_whitespace()
-                .map(|s| s.to_string())
-                .collect();
-            chs.into_par_iter()
-                .map(|ch| encoder.get(&ch).unwrap().clone())
+            line.split_ascii_whitespace()
+                .map(|s| encoder.get(s).unwrap().clone())
+                .fold(BitVec::new(), |mut vec1, vec2| {
+                    vec1.extend(vec2);
+                    vec1
+                })
         })
-        .reduce(
-            || BitVec::new(),
-            |mut v1: BitVec, v2: BitVec| {
-                v1.extend(v2);
-                v1
-            },
-        );
+        .collect();
 
-    match output {
-        Some(output_path) => {
-            let mut out_f = File::create(output_path)?;
-            let header = rmp_serde::encode::to_vec(&encoder)?;
-            out_f.write(&header[..])?;
-            out_f.write(&compressed.to_bytes())?;
-        }
-        None => (),
-    }
+    let compressed_data = CompressedData { encoder, data };
+    let bytes = rmp_serde::encode::to_vec(&compressed_data)?;
 
-    Ok(compressed)
+    let mut out_f = File::create(output_path)?;
+    out_f.write(&bytes).map_err(|err| err.into())
 }
 
-pub fn decompress_file() {
-    // TODO:
-    // - decompress header
-    // - decompress data and write it into another file
+pub fn decompress_file<T, P>(path: P) -> Result<Vec<Vec<T>>, Box<dyn std::error::Error>>
+where
+    T: Eq + Hash + Clone + for<'a> Deserialize<'a> + Send + Sync,
+    P: AsRef<Path>,
+{
+    let file = File::open(path)?;
+    let CompressedData { encoder, data }: CompressedData<T> = rmp_serde::decode::from_read(file)?;
+
+    // TODO: extract into separate fun
+    let mut decoder = HashMap::new();
+    for (token, prefix) in encoder.clone() {
+        decoder.insert(prefix, token);
+    }
+
+    let lines: Vec<_> = data
+        .par_iter()
+        .map(|line| {
+            let mut read_bits = 0;
+            let mut pos = 0;
+            let mut candidate = BitVec::new();
+            let mut tokens = vec![];
+
+            while read_bits < line.len() {
+                loop {
+                    if let Some(bit) = line.get(pos) {
+                        candidate.push(bit);
+                        pos += 1;
+
+                        match decoder.get(&candidate) {
+                            Some(token) => {
+                                tokens.push(token.clone());
+                                read_bits += candidate.len();
+                                pos = 0;
+                                candidate.clear();
+                                break;
+                            }
+                            None => (),
+                        }
+                    } else {
+                        pos = 0;
+                        candidate.clear();
+                        break;
+                    };
+                }
+            }
+
+            // TODO: word vs char
+            tokens
+        })
+        .collect();
+
+    Ok(lines)
 }
 
 impl<T: Eq + Clone + Hash> Tree<T> {
