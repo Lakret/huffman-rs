@@ -1,6 +1,6 @@
 use bit_vec::BitVec;
 use rayon::prelude::*;
-use rmp_serde;
+use rmp_serde::{self, encode};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -22,9 +22,7 @@ struct CompressedData<T: Eq + Hash> {
     data: Vec<BitVec>,
 }
 
-// TODO: use preprocess
-// TODO: try bincode
-pub fn compress(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+pub fn compress_as_chars(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let freqs = freqs::learn_char_frequencies(lines);
     let tree = huffman::build_huffman_tree(&freqs);
     let encoder = tree.to_encoder();
@@ -32,13 +30,6 @@ pub fn compress(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Erro
     let data: Vec<_> = lines
         .par_iter()
         .map(|line| {
-            // TODO: comparison between words & chars compression performance
-            // it seems that words compression yields 1847299618 / 8 / 1024 / 1024 ~= 220MB (w/o header)
-            // and chars compression yields 4385985563 / 8 / 1024 / 1024 ~= 523MB (w/o header)
-            // let chs: Vec<_> = line.chars().collect();
-            //
-            // .split_ascii_whitespace()
-            // .map(|s| encoder.get(s).unwrap().clone())
             line.chars()
                 .map(|ch| encoder.get(&ch).unwrap().clone())
                 .fold(BitVec::new(), |mut vec1, vec2| {
@@ -52,8 +43,36 @@ pub fn compress(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Erro
     rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
 }
 
-pub fn decompress(data: Vec<u8>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let CompressedData { encoder, data }: CompressedData<char> =
+pub fn compress_as_words(lines: &Vec<String>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let freqs = freqs::learn_word_frequencies(lines);
+    let tree = huffman::build_huffman_tree(&freqs);
+    let encoder = tree.to_encoder();
+
+    let data: Vec<_> = lines
+        .par_iter()
+        .map(|line| {
+            line.split_ascii_whitespace()
+                .map(|s| encoder.get(s).unwrap().clone())
+                .fold(BitVec::new(), |mut vec1, vec2| {
+                    vec1.extend(vec2);
+                    vec1
+                })
+        })
+        .collect();
+
+    let compressed_data = CompressedData { encoder, data };
+    rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
+}
+
+pub fn decompress<T, F>(
+    data: Vec<u8>,
+    tokens_to_line: F,
+) -> Result<Vec<String>, Box<dyn std::error::Error>>
+where
+    T: Clone + Eq + Hash + Send + Sync + for<'a> Deserialize<'a>,
+    F: Fn(Vec<T>) -> String + Send + Sync,
+{
+    let CompressedData { encoder, data }: CompressedData<T> =
         rmp_serde::decode::from_slice(&data[..])?;
 
     // TODO: extract into separate fun
@@ -83,9 +102,7 @@ pub fn decompress(data: Vec<u8>) -> Result<Vec<String>, Box<dyn std::error::Erro
                     None => (),
                 }
             }
-
-            // TODO: word vs char
-            tokens.into_iter().collect()
+            tokens_to_line(tokens)
         })
         .collect();
 
@@ -197,8 +214,12 @@ mod tests {
                 .to_string(),
         ];
 
-        let data = compress(&lines).unwrap();
-        let res_lines = decompress(data).unwrap();
+        let data = compress_as_chars(&lines).unwrap();
+        let res_lines = decompress(data, |x: Vec<char>| x.into_iter().collect()).unwrap();
+        assert_eq!(&lines, &res_lines);
+
+        let data = compress_as_words(&lines).unwrap();
+        let res_lines = decompress(data, |x: Vec<String>| x.join(" ")).unwrap();
         assert_eq!(&lines, &res_lines);
     }
 }
