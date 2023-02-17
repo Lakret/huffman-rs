@@ -9,7 +9,8 @@ mod freqs;
 mod huffman;
 
 fn main() -> Result<(), Error> {
-    let compressed = compression::compress_file("data/wikisent2.txt");
+    let compressed =
+        compression::compress_file("data/wikisent2.txt", Some("data/compressed.huffman"));
     dbg!(compressed.unwrap().len());
 
     Ok(())

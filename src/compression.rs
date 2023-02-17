@@ -1,6 +1,13 @@
 use bit_vec::BitVec;
 use rayon::prelude::*;
-use std::{collections::HashMap, fs, hash::Hash, path::Path};
+use rmp_serde;
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    hash::Hash,
+    io::Write,
+    path::Path,
+};
 
 use crate::{
     freqs,
@@ -9,7 +16,10 @@ use crate::{
 use Tree::*;
 
 // TODO: use preprocess
-pub fn compress_file<P: AsRef<Path>>(path: P) -> Result<BitVec, Box<dyn std::error::Error>> {
+pub fn compress_file<P: AsRef<Path>>(
+    path: P,
+    output: Option<P>,
+) -> Result<BitVec, Box<dyn std::error::Error>> {
     let text = fs::read_to_string(path)?;
     let lines: Vec<_> = text.split_inclusive('\n').map(|x| x.to_string()).collect();
 
@@ -38,12 +48,24 @@ pub fn compress_file<P: AsRef<Path>>(path: P) -> Result<BitVec, Box<dyn std::err
                 v1
             },
         );
+
+    match output {
+        Some(output_path) => {
+            let mut out_f = File::create(output_path)?;
+            let header = rmp_serde::encode::to_vec(&encoder)?;
+            out_f.write(&header[..])?;
+            out_f.write(&compressed.to_bytes())?;
+        }
+        None => (),
+    }
+
     Ok(compressed)
 }
 
 pub fn decompress_file() {
     // TODO:
-    // et codes: Vec<BitVec> = rmp_serde::from_slice(data)?;
+    // - decompress header
+    // - decompress data and write it into another file
 }
 
 impl<T: Eq + Clone + Hash> Tree<T> {
