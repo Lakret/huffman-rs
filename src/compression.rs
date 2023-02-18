@@ -25,10 +25,10 @@ where
     TokensIter: Iterator<Item = T>,
 {
     let freqs = get_freqs(lines);
-    let tree = huffman::build_huffman_tree(&freqs);
+    let tree = huffman::huffman_tree(&freqs);
     let encoder = tree.to_encoder();
 
-    let data: Vec<_> = lines
+    let data = lines
         .par_iter()
         .map(|line| {
             line_to_tokens(line)
@@ -45,28 +45,24 @@ where
 }
 
 pub fn decompress<T, F>(
-    data: Vec<u8>,
+    data: &Vec<u8>,
     tokens_to_line: F,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>>
 where
     T: Clone + Eq + Hash + Send + Sync + for<'a> Deserialize<'a>,
     F: Fn(Vec<T>) -> String + Send + Sync,
 {
-    let CompressedData { encoder, data }: CompressedData<T> =
-        rmp_serde::decode::from_slice(&data[..])?;
+    let CompressedData { encoder, data }: CompressedData<T> = rmp_serde::decode::from_slice(data)?;
 
     let decoder = encoder_to_decoder(&encoder);
-    let lines: Vec<_> = data
+    let lines = data
         .par_iter()
         .map(|line| {
-            let mut pos = 0;
-            let mut candidate = BitVec::new();
             let mut tokens = vec![];
+            let mut candidate = BitVec::new();
 
-            while pos < line.len() {
-                let bit = line.get(pos).unwrap();
+            for bit in line {
                 candidate.push(bit);
-                pos += 1;
 
                 match decoder.get(&candidate) {
                     Some(token) => {
@@ -132,15 +128,15 @@ mod tests {
                 .to_string(),
         ];
 
-        let data = compress(&lines, freqs::learn_char_frequencies, |line| line.chars()).unwrap();
-        let res_lines = decompress(data, |x: Vec<char>| x.into_iter().collect()).unwrap();
+        let data = compress(&lines, freqs::char_frequencies, |line| line.chars()).unwrap();
+        let res_lines = decompress(&data, |x: Vec<char>| x.into_iter().collect()).unwrap();
         assert_eq!(&lines, &res_lines);
 
-        let data = compress(&lines, freqs::learn_word_frequencies, |line| {
+        let data = compress(&lines, freqs::word_frequencies, |line| {
             line.split_ascii_whitespace().map(|token| token.to_string())
         })
         .unwrap();
-        let res_lines = decompress(data, |x: Vec<String>| x.join(" ")).unwrap();
+        let res_lines = decompress(&data, |x: Vec<String>| x.join(" ")).unwrap();
         assert_eq!(&lines, &res_lines);
     }
 }

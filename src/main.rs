@@ -18,10 +18,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lines_count = lines.len();
     println!("Read the source file with {lines_count} lines in {time:?}");
 
-    // words compress & decompress
-
+    // Words compress & decompress
     let timer = time::Instant::now();
-    let compressed = compression::compress(&lines, freqs::learn_word_frequencies, |line| {
+    let compressed = compression::compress(&lines, freqs::word_frequencies, |line| {
         line.split_ascii_whitespace().map(|token| token.to_string())
     })?;
     let time = timer.elapsed();
@@ -39,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Read the compressed file in {time:?}");
 
     let timer = time::Instant::now();
-    let res_lines = compression::decompress(data, |tokens: Vec<String>| tokens.join(" "))?;
+    let res_lines = compression::decompress(&data, |tokens: Vec<String>| tokens.join(" "))?;
     let time = timer.elapsed();
     let res_lines_count = res_lines.len();
     println!("Decompressed file with {res_lines_count} lines in {time:?}");
@@ -47,10 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     dbg!(&res_lines[..4]);
     dbg!(&res_lines[(res_lines.len() - 4)..]);
 
+    println!();
+
     // Chars compress & decompress
     let timer = time::Instant::now();
-    let compressed =
-        compression::compress(&lines, freqs::learn_char_frequencies, |line| line.chars())?;
+    let compressed = compression::compress(&lines, freqs::char_frequencies, |line| line.chars())?;
     let time = timer.elapsed();
     println!("Compressed as chars in {time:?}");
 
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let timer = time::Instant::now();
     let res_lines =
-        compression::decompress(data, |tokens: Vec<char>| tokens.into_iter().collect())?;
+        compression::decompress(&data, |tokens: Vec<char>| tokens.into_iter().collect())?;
     let time = timer.elapsed();
     let res_lines_count = res_lines.len();
     println!("Decompressed file with {res_lines_count} lines in {time:?}");

@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use std::collections::HashMap;
 
-pub fn learn_char_frequencies(lines: &Vec<String>) -> HashMap<char, i64> {
+pub fn char_frequencies(lines: &Vec<String>) -> HashMap<char, i64> {
     lines
         .par_iter()
         .fold(
@@ -24,7 +24,7 @@ pub fn learn_char_frequencies(lines: &Vec<String>) -> HashMap<char, i64> {
         )
 }
 
-pub fn learn_word_frequencies(lines: &Vec<String>) -> HashMap<String, i64> {
+pub fn word_frequencies(lines: &Vec<String>) -> HashMap<String, i64> {
     lines
         .par_iter()
         .fold(

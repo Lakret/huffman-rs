@@ -60,7 +60,7 @@ impl<T: Clone + Eq> PartialOrd for Tree<T> {
     }
 }
 
-pub fn build_huffman_tree<T: Eq + Clone>(freqs: &HashMap<T, i64>) -> Tree<T> {
+pub fn huffman_tree<T: Eq + Clone>(freqs: &HashMap<T, i64>) -> Tree<T> {
     let mut heap = BinaryHeap::new();
     for (token, freq) in freqs {
         let (freq, token) = (*freq, token.clone());
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn learn_frequencies_test() {
         let input = vec!["this is an epic sentence".to_string(), "xyz ".to_string()];
-        let freqs = learn_char_frequencies(&input);
+        let freqs = char_frequencies(&input);
         assert_eq!(freqs[&' '], 5);
         assert_eq!(freqs[&'t'], 2);
         assert_eq!(freqs[&'i'], 3);
@@ -107,7 +107,7 @@ mod tests {
         freqs.insert('c', 20);
         freqs.insert('d', 5);
 
-        let tree = build_huffman_tree(&freqs);
+        let tree = huffman_tree(&freqs);
         assert_eq!(tree.freq(), 100);
 
         // the most frequent character only requires 1 bit
