@@ -37,9 +37,12 @@ enum Mode {
 //
 // cargo run --release -- compress chars data/wikisent2.txt data/chars.huffman
 // cargo run --release -- extract chars data/chars.huffman data/extracted.txt
+//
+// to compare with zip:
+// time zip data/test.zip data/wikisent2.txt
+// time unzip data/test.zip -d data/test_zip
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
-    dbg!(&args);
 
     match args.action {
         Action::Compress => {
