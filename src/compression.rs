@@ -20,7 +20,7 @@ pub fn compress<'a, T, FreqsF, TokenExtractor, TokensIter>(
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>>
 where
     T: Clone + Eq + Hash + Send + Sync + Serialize,
-    FreqsF: Fn(&'a Vec<String>) -> HashMap<T, i64>,
+    FreqsF: Fn(&'a Vec<String>) -> HashMap<T, u64>,
     TokenExtractor: Fn(&'a str) -> TokensIter + Send + Sync,
     TokensIter: Iterator<Item = T>,
 {

@@ -7,11 +7,11 @@ use Tree::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tree<T> {
     Leaf {
-        freq: i64,
+        freq: u64,
         token: T,
     },
     Node {
-        freq: i64,
+        freq: u64,
         left: Box<Tree<T>>,
         right: Box<Tree<T>>,
     },
@@ -19,7 +19,7 @@ pub enum Tree<T> {
 
 #[allow(dead_code)]
 impl<T: Clone> Tree<T> {
-    pub fn freq(&self) -> i64 {
+    pub fn freq(&self) -> u64 {
         match self {
             Leaf { freq, .. } => *freq,
             Node { freq, .. } => *freq,
@@ -60,7 +60,7 @@ impl<T: Clone + Eq> PartialOrd for Tree<T> {
     }
 }
 
-pub fn huffman_tree<T: Eq + Clone>(freqs: &HashMap<T, i64>) -> Tree<T> {
+pub fn huffman_tree<T: Eq + Clone>(freqs: &HashMap<T, u64>) -> Tree<T> {
     let mut heap = BinaryHeap::new();
     for (token, freq) in freqs {
         let (freq, token) = (*freq, token.clone());
