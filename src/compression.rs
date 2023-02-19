@@ -44,7 +44,7 @@ where
     rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
 }
 
-pub fn decompress<T, F>(
+pub fn extract<T, F>(
     data: &Vec<u8>,
     tokens_to_line: F,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>>
@@ -129,14 +129,14 @@ mod tests {
         ];
 
         let data = compress(&lines, freqs::char_frequencies, |line| line.chars()).unwrap();
-        let res_lines = decompress(&data, |x: Vec<char>| x.into_iter().collect()).unwrap();
+        let res_lines = extract(&data, |x: Vec<char>| x.into_iter().collect()).unwrap();
         assert_eq!(&lines, &res_lines);
 
         let data = compress(&lines, freqs::word_frequencies, |line| {
             line.split_ascii_whitespace().map(|token| token.to_string())
         })
         .unwrap();
-        let res_lines = decompress(&data, |x: Vec<String>| x.join(" ")).unwrap();
+        let res_lines = extract(&data, |x: Vec<String>| x.join(" ")).unwrap();
         assert_eq!(&lines, &res_lines);
     }
 }

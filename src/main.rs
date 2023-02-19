@@ -79,12 +79,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let timer = time::Instant::now();
             let content = match args.mode {
-                Mode::Words => {
-                    compression::decompress(&data, |tokens: Vec<String>| tokens.join(" "))?
+                Mode::Words => compression::extract(&data, |tokens: Vec<String>| tokens.join(" "))?,
+                Mode::Chars => {
+                    compression::extract(&data, |tokens: Vec<char>| tokens.into_iter().collect())?
                 }
-                Mode::Chars => compression::decompress(&data, |tokens: Vec<char>| {
-                    tokens.into_iter().collect()
-                })?,
             };
             let time = timer.elapsed();
             let lines_count = content.len();
