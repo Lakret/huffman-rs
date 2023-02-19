@@ -1,5 +1,5 @@
 [package]
-name = "greedy-rs"
+name = "huffman-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,3 +10,4 @@ bit-vec = { version = "0.6", features = ["serde"] }
 rayon = "1.6"
 serde = { version = "1.0", features = ["derive"] }
 rmp-serde = "1.1.1"
+clap = { version = "4.1.6", features = ["derive"] }
