@@ -44,12 +44,12 @@ where
     rmp_serde::encode::to_vec(&compressed_data).map_err(|err| err.into())
 }
 
-pub fn extract<T, F>(
-    data: &Vec<u8>,
+pub fn extract<'a, T, F>(
+    data: &'a Vec<u8>,
     tokens_to_line: F,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>>
 where
-    T: Clone + Eq + Hash + Send + Sync + for<'a> Deserialize<'a>,
+    T: Clone + Eq + Hash + Send + Sync + Deserialize<'a>,
     F: Fn(Vec<T>) -> String + Send + Sync,
 {
     let CompressedData { encoder, data }: CompressedData<T> = rmp_serde::decode::from_slice(data)?;
